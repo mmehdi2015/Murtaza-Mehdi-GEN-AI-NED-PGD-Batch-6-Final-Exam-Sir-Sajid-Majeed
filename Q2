@@ -170,3 +170,109 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+pip install langchain openai faiss-cpu langsmith pandas
+import os
+from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.text_splitter import CharacterTextSplitter
+from langchain.document_loaders import TextLoader
+from langchain.vectorstores import FAISS
+
+# Load the document
+file_path = r'd:\HR\HR-Policy-Revised-JUNE-2022.txt'
+loader = TextLoader(file_path)
+documents = loader.load()
+
+# Split the documents into smaller chunks
+text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+texts = text_splitter.split_documents(documents)
+
+# Create embeddings using OpenAI's embedding model
+embeddings = OpenAIEmbeddings()
+
+# Create a FAISS vector store to store the embeddings
+faiss_index = FAISS.from_documents(texts, embeddings)
+
+# Save the FAISS index for future use
+faiss_index.save_local("faiss_index")
+
+from langchain.chains import RetrievalQA
+from langchain.llms import OpenAI
+
+# Load the FAISS index
+faiss_index = FAISS.load_local("faiss_index", embeddings)
+
+# Setup the retriever
+retriever = faiss_index.as_retriever(search_type="similarity", search_kwargs={"k": 5})
+
+# Setup the LLM for response generation
+llm = OpenAI(temperature=0.7)
+
+# Create the Retrieval-Augmented Generation (RAG) chain
+qa_chain = RetrievalQA.from_chain_type(llm=llm, chain_type="map_reduce", retriever=retriever)
+
+# Query example
+query = "What are the new policies for leave and time off?"
+response = qa_chain.run(query)
+print(response)
+
+import langsmith
+
+# Initialize LangSmith client (you will need your API key)
+client = langsmith.Client(api_key="your-langsmith-api-key")
+
+# Wrap the RAG chain for monitoring
+from langsmith.prompts import tracked
+
+@tracked(client)
+def run_rag_pipeline(query):
+    return qa_chain.run(query)
+
+# Example usage of the RAG pipeline with LangSmith monitoring
+response = run_rag_pipeline(query)
+print(response)
+import os
+from langchain.embeddings.openai import OpenAIEmbeddings
+from langchain.text_splitter import CharacterTextSplitter
+from langchain.document_loaders import TextLoader
+from langchain.vectorstores import FAISS
+from langchain.chains import RetrievalQA
+from langchain.llms import OpenAI
+import langsmith
+
+# LangSmith Setup
+client = langsmith.Client(api_key="your-langsmith-api-key")
+
+# Load and Split Document
+file_path = r'd:\HR\HR-Policy-Revised-JUNE-2022.txt'
+loader = TextLoader(file_path)
+documents = loader.load()
+text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+texts = text_splitter.split_documents(documents)
+
+# Embed the data
+embeddings = OpenAIEmbeddings()
+faiss_index = FAISS.from_documents(texts, embeddings)
+faiss_index.save_local("faiss_index")
+
+# Load FAISS Index and Set up Retrieval
+faiss_index = FAISS.load_local("faiss_index", embeddings)
+retriever = faiss_index.as_retriever(search_type="similarity", search_kwargs={"k": 5})
+
+# Set up LLM
+llm = OpenAI(temperature=0.7)
+
+# Create RAG Chain
+qa_chain = RetrievalQA.from_chain_type(llm=llm, chain_type="map_reduce", retriever=retriever)
+
+# LangSmith Monitored Function
+@langsmith.prompts.tracked(client)
+def run_rag_pipeline(query):
+    return qa_chain.run(query)
+
+# Example Query
+query = "What are the new policies for leave and time off?"
+response = run_rag_pipeline(query)
+print(response)
+
+
+
